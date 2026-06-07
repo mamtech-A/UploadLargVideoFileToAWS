@@ -1,0 +1,6 @@
+services:
+  uploader:
+    build: .
+    env_file: .env
+    volumes:
+      - ./Video:/videos
