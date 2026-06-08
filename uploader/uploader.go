@@ -119,6 +119,7 @@ func (u *Uploader) Upload(ctx context.Context, filePath string) error {
 
 		var etag string
 		var uploadErr error
+		var partDuration time.Duration
 		for attempt := 0; attempt <= u.cfg.MaxRetries; attempt++ {
 			if attempt > 0 {
 				wait := time.Duration(math.Pow(2, float64(attempt-1))) * time.Second
@@ -130,6 +131,7 @@ func (u *Uploader) Upload(ctx context.Context, filePath string) error {
 				}
 			}
 
+			start := time.Now()
 			result, err := u.client.UploadPart(ctx, &s3.UploadPartInput{
 				Bucket:     aws.String(state.Bucket),
 				Key:        aws.String(state.Key),
@@ -145,6 +147,7 @@ func (u *Uploader) Upload(ctx context.Context, filePath string) error {
 				fmt.Printf("  Part %d failed: %v\n", partNum, err)
 				continue
 			}
+			partDuration = time.Since(start)
 			etag = *result.ETag
 			uploadErr = nil
 			break
@@ -160,7 +163,8 @@ func (u *Uploader) Upload(ctx context.Context, filePath string) error {
 		if err := saveState(state); err != nil {
 			return fmt.Errorf("save state after part %d: %w", partNum, err)
 		}
-		fmt.Printf("Part %d/%d uploaded (%.1f MB)\n", partNum, totalParts, float64(size)/1024/1024)
+		mbps := float64(size) / 1024 / 1024 / partDuration.Seconds()
+		fmt.Printf("Part %d/%d uploaded (%.1f MB) — %.2f MB/s\n", partNum, totalParts, float64(size)/1024/1024, mbps)
 	}
 
 	// Complete the multipart upload
